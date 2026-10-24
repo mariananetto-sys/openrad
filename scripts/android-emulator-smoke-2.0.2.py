@@ -40,7 +40,7 @@ def step(name, func):
 def pid():
     return call("adb", "shell", "pidof", APP, check=False).strip()
 
-def capture(name):
+def capture(name, expected=None):
     if not pid():
         raise AssertionError("App process is no longer running")
     time.sleep(2)
@@ -64,21 +64,27 @@ def capture(name):
     RESULT["screens"].append({"name":name, "screenshot":screenshot.name, "visible_texts":values[:70], "nodes":len(list(hierarchy.iter("node")))})
     if len(values) < 2:
         raise AssertionError(f"UI contains insufficient text: {values}")
+    if expected and not any(expected.casefold() in value.casefold() for value in values):
+        raise AssertionError(f"Expected screen marker {expected!r}, but found {values}")
     return hierarchy
 
 def tap(hierarchy,label):
     aliases = {"My networks":["My networks", "Minhas redes"], "Discover":["Discover", "Descobrir"],
                "Auto join":["Auto join", "Entrada automática", "Autoentrar"],
                "Settings":["Settings", "Configurações"]}
+    candidates = []
     for node in hierarchy.iter("node"):
         text = node.attrib.get("text","")
         desc = node.attrib.get("content-desc","")
-        if any(s.casefold() == text.casefold() or s.casefold() == desc.casefold() for s in aliases[label]):
+        if any(a.casefold() == text.casefold() or a.casefold() == desc.casefold() for a in aliases[label]):
             match = re.fullmatch(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", node.attrib.get("bounds",""))
             if match:
                 x1,y1,x2,y2 = map(int,match.groups())
-                call("adb","shell","input","tap",str((x1+x2)//2),str((y1+y2)//2))
-                return f"tap {label} at {(x1+x2)//2},{(y1+y2)//2}"
+                candidates.append(((y1+y2)//2,(x1+x2)//2))
+    if candidates:
+        y,x = max(candidates)  # The actual bottom navigation tab is below similarly named Settings controls.
+        call("adb","shell","input","tap",str(x),str(y))
+        return f"tap navigation tab {label} at {x},{y}"
     raise AssertionError(f"Missing tab {label} in emulator UI; seen: {[x.attrib.get('text') for x in hierarchy.iter('node') if x.attrib.get('text')]}")
 
 def main():
@@ -116,11 +122,13 @@ def main():
         if not pid(): raise AssertionError("App crashed or exited during startup")
         return out[-450:]
     if not step("launch MainActivity without crash",launch): return
-    current = step("render initial My networks screen",lambda:capture("01-networks-initial"))
+    current = step("render initial My networks screen",lambda:capture("01-networks-initial", "Ready to connect"))
+    markers = {"Discover":"Find your people.", "Auto join":"Select networks and join them together",
+               "Settings":"Device name", "My networks":"Ready to connect"}
     if current is None: return
     for n,(label,slug) in enumerate([("Discover","discover"),("Auto join","auto-join"),("Settings","settings"),("My networks","networks-return")],start=2):
         if step(f"navigate to {label}",lambda lab=label:tap(current,lab)) is None: continue
-        next_ui = step(f"render {label} without crash",lambda sn=f"{n:02d}-{slug}":capture(sn))
+        next_ui = step(f"render {label} without crash",lambda sn=f"{n:02d}-{slug}", marker=markers[label]:capture(sn, marker))
         if next_ui is not None: current=next_ui
     def relaunch():
         call("adb","shell","am","force-stop",APP)
