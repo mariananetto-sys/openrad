@@ -1,0 +1,41 @@
+﻿name: android-2.0.2-real-vpn
+
+on:
+  push:
+    branches:
+      - test/android-2.0.2-live-vpn
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live-vpn:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Install real OpenRad 2.0.2 APK and exercise VPN against live service
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          emulator-boot-timeout: 900
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: python3 scripts/android-live-vpn-test.py
+      - name: Preserve screenshots, results and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: openrad-2.0.2-android-live-vpn-report
+          path: dist/android-live-vpn-report/
+          if-no-files-found: warn
+          retention-days: 30
