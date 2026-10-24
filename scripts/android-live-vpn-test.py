@@ -14,7 +14,7 @@ ROOT=Path("dist/android-live-vpn-report")
 ROOT.mkdir(parents=True,exist_ok=True)
 APP="com.openrad.mobile.debug"
 ACTIVITY="com.openrad.mobile.MainActivity"
-NETWORK="Minecraft [Português 16]"
+NETWORK="RADMINTON"
 APK_URL="https://github.com/mariananetto-sys/openrad/releases/download/v2.0.2-android-preview.1/openrad-2.0.2-android-DEBUG-preview.apk"
 EXPECTED_HASH="91ce20608516b2747c591fcce0afe82f2d5aead96d5870e27c54810e3a5f758c"
 R={"apk_sha256_expected":EXPECTED_HASH,"network":NETWORK,"tests":[],"samples":[],"failures":[],"notes":[]}
@@ -101,7 +101,7 @@ def search_public_network():
     click("Discover",bottom=True)
     time.sleep(2)
     click("Search games",partial=True)
-    run("adb","shell","input","text","Minecraft")
+    run("adb","shell","input","text","Radmin")
     run("adb","shell","input","keyevent","KEYCODE_BACK")
     for j in range(20):
         root,nodes,values,xml=dump_ui()
@@ -204,3 +204,4 @@ finally:
     for x in R["tests"]:print("RESULT",x["name"],"PASS" if x["ok"] else "FAIL",flush=True)
     print("REQUIRED_TESTS",R["passed_required"],"FATAL_EXCEPTIONS",R.get("fatal_exception_count"),flush=True)
 sys.exit(0 if R["passed_required"] else 1)
+
