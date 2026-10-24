@@ -1,0 +1,42 @@
+﻿name: android-2.0.2-emulator-smoke
+
+on:
+  push:
+    branches:
+      - test/android-2.0.2-emulator
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  emulator-android-14:
+    name: Install and navigate OpenRad 2.0.2 on Android 14 emulator
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Enable KVM acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Start Android 14 emulator, install APK and run smoke tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          emulator-boot-timeout: 900
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: python3 scripts/android-emulator-smoke-2.0.2.py
+      - name: Upload screenshots, UI dumps and report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: openrad-2.0.2-android14-emulator-report
+          path: dist/android-emulator-report/
+          if-no-files-found: warn
+          retention-days: 30
