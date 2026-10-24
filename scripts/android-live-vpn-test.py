@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """Test real OpenRad Android APK with live service. Independent of fake/test engines."""
 import hashlib
 import json
@@ -155,6 +155,22 @@ def find_own_windows_peer():
     capture("05-peers-last-screen")
     raise AssertionError("Windows test client not visible in peer list; may be below scroll or not connected")
 
+def test_authenticated_peer_rtt():
+    root, nodes, values, xml = dump_ui()
+    if "Test RTT" not in values:
+        raise AssertionError("No authenticated connected peer exposes RTT test")
+    click("Test RTT")
+    for attempt in range(10):
+        time.sleep(2)
+        root, nodes, values, xml = dump_ui()
+        matches = [v for v in values if re.fullmatch(r"[0-9]+(?:\.[0-9]+)? ms", v)]
+        if matches:
+            capture("07-authenticated-peer-rtt")
+            return {"protocol":"OpenRad authenticated RTT", "measurement":matches[0]}
+        if any("No response - strict firewall?" in v for v in values):
+            raise AssertionError("RTT probe to authenticated peer did not respond")
+    raise AssertionError("RTT result not visible before timeout")
+
 def main():
     record("Android 14 emulator is running",lambda:run("adb","shell","getprop","ro.build.version.release"),True)
     apk=ROOT/"published-openrad-2.0.2-debug.apk"
@@ -181,6 +197,9 @@ def main():
         R["join"]=record("Join same network as Windows client",join_public_network,False)
         if R["join"]:
             record("Discover Windows 2.0.2 peer",find_own_windows_peer,False)
+            R["rtt"] = record("Measure actual authenticated peer RTT",test_authenticated_peer_rtt,False)
+            # Keep Android online for checking the reverse path from Windows.
+            time.sleep(42)
     try:
         click("My networks",bottom=True)
         capture("06-final")
