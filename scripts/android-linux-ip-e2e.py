@@ -184,8 +184,7 @@ def configure_android_force_relay():
     label_xy=midpoint(labels[0])
     toggles=[]
     for n in nodes:
-        kind=n.attrib.get("class","")
-        if "Switch" in kind:
+        if n.attrib.get("checkable")=="true" and n.attrib.get("clickable")=="true":
             xy=midpoint(n)
             if xy:
                 toggles.append((abs(xy[1]-label_xy[1]),xy,n.attrib.get("checked")))
