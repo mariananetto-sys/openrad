@@ -1,0 +1,58 @@
+﻿name: android-2.0.2-end-to-end-ip
+
+on:
+  push:
+    branches:
+      - test/android-linux-ip-e2e
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  real-ip:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download prebuilt OpenRad 2.0.2 Linux candidate
+        uses: actions/download-artifact@v4
+        with:
+          name: openrad-2.0.2-linux-candidate
+          repository: mariananetto-sys/openrad
+          run-id: 40138356096
+          github-token: ${{ github.token }}
+          path: dist/e2e-binary
+      - name: Setup isolated Linux TAP and ephemeral private test network
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq iproute2 iputils-ping
+          test -c /dev/net/tun
+          (cd dist/e2e-binary && sha256sum -c openrad-v2.0.2-linux-x86_64.tar.gz.sha256)
+          tar -xzf dist/e2e-binary/openrad-v2.0.2-linux-x86_64.tar.gz -C dist/e2e-binary
+          chmod +x dist/e2e-binary/openrad-v2.0.2-linux-x86_64/openrad
+          python3 scripts/android-linux-ip-e2e.py prepare
+      - name: Boot Android 14 emulator and exchange real IP packets with Linux
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          emulator-boot-timeout: 900
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: python3 scripts/android-linux-ip-e2e.py android
+      - name: Clean up private network and Linux TAP
+        if: always()
+        run: python3 scripts/android-linux-ip-e2e.py cleanup || true
+      - name: Upload proof and diagnostic report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: openrad-2.0.2-ip-e2e-results
+          path: dist/android-ip-e2e-results/
+          if-no-files-found: warn
+          retention-days: 30
