@@ -28,12 +28,12 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update -qq
-          sudo apt-get install -y -qq iproute2 iputils-ping
+          sudo apt-get install -y -qq iproute2 iputils-ping gnome-keyring dbus-x11
           test -c /dev/net/tun
           (cd dist/e2e-binary && sha256sum -c openrad-v2.0.2-linux-x86_64.tar.gz.sha256)
           tar -xzf dist/e2e-binary/openrad-v2.0.2-linux-x86_64.tar.gz -C dist/e2e-binary
           chmod +x dist/e2e-binary/openrad-v2.0.2-linux-x86_64/openrad
-          python3 scripts/android-linux-ip-e2e.py prepare
+          dbus-run-session -- bash -c 'printf "e2e-runner-temporary-keyring\\n" | gnome-keyring-daemon --unlock >/dev/null; python3 scripts/android-linux-ip-e2e.py prepare'
       - name: Boot Android 14 emulator and exchange real IP packets with Linux
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -56,3 +56,4 @@ jobs:
           path: dist/android-ip-e2e-results/
           if-no-files-found: warn
           retention-days: 30
+
