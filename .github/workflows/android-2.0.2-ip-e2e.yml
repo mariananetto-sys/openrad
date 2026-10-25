@@ -34,6 +34,11 @@ jobs:
           tar -xzf dist/e2e-binary/openrad-v2.0.2-linux-x86_64.tar.gz -C dist/e2e-binary
           chmod +x dist/e2e-binary/openrad-v2.0.2-linux-x86_64/openrad
           dbus-run-session -- bash -c 'printf "e2e-runner-temporary-keyring\\n" | gnome-keyring-daemon --unlock >/dev/null; python3 scripts/android-linux-ip-e2e.py prepare'
+      - name: Enable KVM acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
       - name: Boot Android 14 emulator and exchange real IP packets with Linux
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -56,5 +61,6 @@ jobs:
           path: dist/android-ip-e2e-results/
           if-no-files-found: warn
           retention-days: 30
+
 
 
