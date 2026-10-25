@@ -245,9 +245,17 @@ def run_android():
     REPORT_DATA["ephemeral_network_name"]=ctx["name"]
     # Never save private test password to report.
     apk=Path(os.environ["RUNNER_TEMP"])/"openrad-e2e.apk"
-    with urllib.request.urlopen(APK_URL,timeout=120) as resp:apk.write_bytes(resp.read())
+    locally_built=os.environ.get("OPENRAD_E2E_APK")
+    if locally_built:
+        import shutil
+        shutil.copyfile(locally_built,apk)
+        REPORT_DATA["apk_source_commit"]=os.environ.get("GITHUB_SHA")
+        REPORT_DATA["apk_build_type"]="local CI debug build from tested source"
+    else:
+        with urllib.request.urlopen(APK_URL,timeout=120) as resp:apk.write_bytes(resp.read())
     h=hashlib.sha256(apk.read_bytes()).hexdigest()
-    if h!=APK_HASH: raise AssertionError(f"Published APK hash mismatch: {h}")
+    if not locally_built and h!=APK_HASH: raise AssertionError(f"Published APK hash mismatch: {h}")
+    REPORT_DATA["apk_sha256"]=h
     step("Install exact signed-debug preview APK",lambda:cmd("adb","install","-r",str(apk),timeout=120))
     step("Launch OpenRad Android",lambda:cmd("adb","shell","am","start","-W","-n",PACKAGE+"/com.openrad.mobile.MainActivity"))
     time.sleep(5)
