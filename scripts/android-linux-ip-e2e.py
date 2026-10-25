@@ -316,6 +316,29 @@ if __name__=="__main__":
                 (REPORT/"android-logcat.txt").write_text("\n".join(log[-350:]),encoding="utf-8")
                 REPORT_DATA["fatal_exception_count"]=sum("FATAL EXCEPTION" in x for x in log)
             except Exception as e:REPORT_DATA["logcat_error"]=str(e)
+            # Keep only diagnostic event categories and safe transport metadata.
+            try:
+                from collections import Counter
+                profile=Path(ctx["profile"])
+                paths=sorted((profile/"diagnostics").glob("connection*.jsonl"))
+                records=[]
+                for path in paths:
+                    for line in path.read_text(encoding="utf-8").splitlines():
+                        try:
+                            record=json.loads(line)
+                            kind=record.get("event","")
+                            if kind in ("peer_connecting","peer_connected","peer_start_failed","peer_retry_scheduled","incoming_record_rejected","peer_cancelled","membership_updated","control_health","control_closed","session_health","server_disconnect","session_attached","control_command_queue_full"):
+                                safe={"event":kind,"elapsed_ms":record.get("elapsed_ms")}
+                                fields=record.get("details") or {}
+                                safe["details"]={key:fields[key] for key in ("rid","incoming","error","peers","eligible","operation","server","status","reason","heartbeats_sent","max_heartbeat_late_ms") if key in fields}
+                                records.append(safe)
+                        except (ValueError,TypeError):
+                            continue
+                (REPORT/"linux-diagnostics-safe.json").write_text(json.dumps(records[-500:],indent=2),encoding="utf-8")
+                REPORT_DATA["linux_diagnostic_counts"]=dict(Counter(item["event"] for item in records))
+                print("LINUX DIAGNOSTICS",REPORT_DATA["linux_diagnostic_counts"],flush=True)
+            except Exception as exc:
+                REPORT_DATA["linux_diagnostic_error"]=str(exc)
             (REPORT/"report.json").write_text(json.dumps(REPORT_DATA,ensure_ascii=False,indent=2),encoding="utf-8")
             print("FINAL RESULT:",REPORT_DATA.get("ip_end_to_end_verified",False),flush=True)
             if not REPORT_DATA.get("ip_end_to_end_verified",False):
