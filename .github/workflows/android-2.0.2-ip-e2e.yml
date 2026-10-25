@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   real-ip:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
@@ -56,4 +56,5 @@ jobs:
           path: dist/android-ip-e2e-results/
           if-no-files-found: warn
           retention-days: 30
+
 
