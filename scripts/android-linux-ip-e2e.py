@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """Run a real OpenRad 2.0.2 Linux TAP ↔ Android VpnService end-to-end IP test."""
 import hashlib
 import json
@@ -143,10 +143,22 @@ def join_private(ctx):
     if len(edits)<2:
         screenshot("03-private-dialog-error")
         raise RuntimeError(f"Missing Android network name/password text inputs (found {len(edits)})")
-    for node,value in zip(edits[:2],[ctx["name"],ctx["password"]]):
-        xy=midpoint(node)
+    # The soft keyboard moves the dialog, so never reuse input coordinates.
+    for index,value in enumerate((ctx["name"],ctx["password"])):
+        cmd("adb","shell","input","keyevent","KEYCODE_BACK") if index else None
+        nodes,vals,raw=ui()
+        edits=[n for n in nodes if "EditText" in n.attrib.get("class","")]
+        if len(edits)<2:
+            raise RuntimeError("Input fields disappeared from join dialog")
+        xy=midpoint(edits[index])
         cmd("adb","shell","input","tap",str(xy[0]),str(xy[1]))
         cmd("adb","shell","input","text",value)
+        if index==0:
+            # Check that text landed in the network field before proceeding.
+            nodes,vals,raw=ui()
+            edits=[n for n in nodes if "EditText" in n.attrib.get("class","")]
+            if ctx["name"] not in edits[0].attrib.get("text",""):
+                raise AssertionError("Network name did not enter the first field")
     cmd("adb","shell","input","keyevent","KEYCODE_BACK")
     time.sleep(1)
     screenshot("03-private-network-input")
