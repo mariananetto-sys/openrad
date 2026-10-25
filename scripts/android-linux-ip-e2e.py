@@ -62,6 +62,7 @@ def run_prepare():
     print("Linux TUN: ",cmd("ls","-l","/dev/net/tun"),flush=True)
     print("Sudo non-interactive: ",cmd("sudo","-n","true"),flush=True)
     print("Identity:",cli(context,"init","--node-name",context["linux_name"]).get("message"),flush=True)
+    print("Force relay:",cli(context,"force-relay","true").get("message"),flush=True)
     print("Start:",cli(context,"start").get("message"),flush=True)
     for i in range(32):
         s=state(context)
@@ -173,6 +174,41 @@ def join_private(ctx):
     screenshot("04-private-network-not-joined")
     raise RuntimeError("Android didn't show the private network after joining")
 
+def configure_android_force_relay():
+    tap_text("Settings",bottom=True)
+    time.sleep(1)
+    nodes,vals,raw=ui()
+    labels=[n for n in nodes if n.attrib.get("text")=="Force relay only"]
+    if not labels:
+        raise RuntimeError("Force relay setting is not visible")
+    label_xy=midpoint(labels[0])
+    toggles=[]
+    for n in nodes:
+        kind=n.attrib.get("class","")
+        if "Switch" in kind:
+            xy=midpoint(n)
+            if xy:
+                toggles.append((abs(xy[1]-label_xy[1]),xy,n.attrib.get("checked")))
+    if not toggles:
+        raise RuntimeError("Could not find force-relay switch")
+    dist,xy,checked=min(toggles,key=lambda t:t[0])
+    if dist>90:raise RuntimeError(f"Switch too far from Force relay label: {dist} pixels")
+    if checked!="true":
+        cmd("adb","shell","input","tap",str(xy[0]),str(xy[1]))
+    screenshot("01-relay-setting-draft")
+    for i in range(12):
+        nodes,vals,raw=ui()
+        if "Save preferences" in vals:
+            tap_text("Save preferences")
+            time.sleep(2)
+            break
+        cmd("adb","shell","input","swipe","530","1770","530","470","280")
+        time.sleep(0.5)
+    else:raise RuntimeError("Save preferences button not reached")
+    tap_text("My networks",bottom=True)
+    time.sleep(1)
+    return "Force relay only enabled and settings saved"
+
 def peers_linux(ctx):
     return (state(ctx).get("snapshot") or {}).get("peers") or {}
 
@@ -185,6 +221,10 @@ def find_android_peer_linux(ctx):
                 print("LINUX SEES ANDROID:",key,entry.get("status"),entry.get("transport"),p.get("vip"),flush=True)
                 if entry.get("status")=="Connected" and entry.get("transport"):
                     return {"rid":str(key),"vip":p.get("vip"),"transport":entry.get("transport")}
+        if i in (10,24):
+            try:
+                print("RETRY LINUX PEERS:",cli(ctx,"retry-peers").get("message"),flush=True)
+            except Exception as exc:print("RETRY ISSUE:",str(exc)[:150],flush=True)
         if i%6==0:
             print("LINUX PEERS",i, [(v.get("peer") or {}).get("name") for v in ps.values()],flush=True)
         time.sleep(2)
@@ -213,6 +253,8 @@ def run_android():
     step("Launch OpenRad Android",lambda:cmd("adb","shell","am","start","-W","-n",PACKAGE+"/com.openrad.mobile.MainActivity"))
     time.sleep(5)
     screenshot("01-idle")
+    if not step("Force relay on Android",configure_android_force_relay):
+        raise RuntimeError("Cannot apply relay-only policy to Android")
     step("Ask Android for VPN connection",lambda:tap_text("Connect"))
     android_vip=step("Start real Android VpnService and obtain VPN IP",wait_android_online)
     screenshot("02-android-vpn-ready")
